@@ -1,3 +1,12 @@
+window.fsAttributes = window.fsAttributes || [];
+window.fsAttributes.push([
+  'cmsload',
+  (listInstances) => {
+  console.log('ready');
+		window.isFuseListLoaded = true;
+  },
+]);
+
 document.addEventListener("DOMContentLoaded", function () {
   // Get UI elements by data attributes
   const input = document.querySelector('[data-fuse-element="input"]'); // input field
