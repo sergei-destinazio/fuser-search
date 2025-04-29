@@ -522,5 +522,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }  
       }
     }
-  
+
+    // Prevent form submit
+    input.closest("form").addEventListener("submit", (e) => e.preventDefault());
 });
