@@ -176,6 +176,81 @@ document.addEventListener("DOMContentLoaded", function () {
   const titleField = "title";
 
   // Main smart search function with prioritization logic
+  // function searchSmart(query) {
+  //   // List of common words to ignore in search
+  //   const stopWords = new Set([
+  //     "a", "an", "the", "is", "of", "in", "at", "on", "to", "for", "with", "and", "or",
+  //     "does", "how", "what", "can", "do"
+  //   ]);
+
+  //   // Clean and split query into significant words
+  //   const words = query
+  //     .trim()
+  //     .toLowerCase()
+  //     .split(/\s+/)
+  //     .filter((w) => w.length > 2 && !stopWords.has(w));
+
+  //   const resultMap = new Map();
+  //   const fullResults = fuse.search(query);
+
+  //   // First pass: store full query matches
+  //   fullResults.forEach((res) => {
+  //     const id = res.item.id;
+  //     resultMap.set(id, {
+  //       item: res.item,
+  //       scoreSum: res.score,
+  //       count: 1,
+  //       fullMatch: true,
+  //       matchedWords: new Set(),
+  //       matchedInTitle: false,
+  //     });
+  //   });
+
+  //   // Second pass: store partial matches per word
+  //   words.forEach((word) => {
+  //     const results = fuse.search(word);
+  //     results.forEach((res) => {
+  //       const id = res.item.id;
+  //       if (!resultMap.has(id)) {
+  //         resultMap.set(id, {
+  //           item: res.item,
+  //           scoreSum: 0,
+  //           count: 0,
+  //           fullMatch: false,
+  //           matchedWords: new Set(),
+  //           matchedInTitle: false,
+  //         });
+  //       }
+  //       const entry = resultMap.get(id);
+  //       entry.scoreSum += res.score;
+  //       entry.count += 1;
+  //       entry.matchedWords.add(word);
+  //       // Mark if word was found in the title field
+  //       if (fields.includes(titleField) && res.item[titleField]?.toLowerCase().includes(word)) {
+  //         entry.matchedInTitle = true;
+  //       }
+  //     });
+  //   });
+
+  //   // Transform and sort results by relevance
+  //   return Array.from(resultMap.values())
+  //     .map((entry) => ({
+  //       item: entry.item,
+  //       averageScore: entry.scoreSum / entry.count,
+  //       fullMatch: entry.fullMatch,
+  //       matchedCount: entry.matchedWords.size,
+  //       matchedInTitle: entry.matchedInTitle,
+  //     }))
+  //     .sort((a, b) => {
+  //       // Sort by title match > number of matched words > full match > average score
+  //       if (a.matchedInTitle && !b.matchedInTitle) return -1;
+  //       if (!a.matchedInTitle && b.matchedInTitle) return 1;
+  //       if (b.matchedCount !== a.matchedCount) return b.matchedCount - a.matchedCount;
+  //       if (a.fullMatch && !b.fullMatch) return -1;
+  //       if (!a.fullMatch && b.fullMatch) return 1;
+  //       return a.averageScore - b.averageScore;
+  //     });
+  // }
   function searchSmart(query) {
     const stopWords = new Set([
       "a", "an", "the", "is", "of", "in", "at", "on", "to", "for", "with", "and", "or",
