@@ -513,8 +513,8 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       // Add ellipsis when needed
-      if (currentPage > 2 && i === 1 ||
-        currentPage < totalPages - 1 && i === totalPages - 1
+      if ((currentPage > 2 && i === 1 ||
+        currentPage < totalPages - 1 && i === totalPages - 1) && (totalPages > 5)
       ) {
         appendDots();
       }
