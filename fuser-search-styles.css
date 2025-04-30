@@ -1,5 +1,5 @@
 [data-fuse-item],
-[fuse-initial-hidden] {
+[fuse-initial-state=”true”] {
     display: none;
 }
 
