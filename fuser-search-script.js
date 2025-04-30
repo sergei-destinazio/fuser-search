@@ -110,10 +110,11 @@ document.addEventListener("DOMContentLoaded", function () {
     if (initialElement && controls) controls.style.display = "none"; // hide pagination
 
     // Remove initial state markers
-    document.querySelectorAll('[fuse-initial-hidden]').forEach((el) => {
-      el.removeAttribute("fuse-initial-hidden");
+    document.querySelectorAll('[fuse-initial-state=”true”]').forEach((el) => {
+      el.removeAttribute("fuse-initial-state=”true”");
     });
   }
+
   // Highlight matching words in text
   function highlightText(text, words) {
     // Escape special characters and create a case-insensitive regex pattern for all words
