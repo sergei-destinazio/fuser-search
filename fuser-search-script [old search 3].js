@@ -117,6 +117,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Highlight matching words in text
   function highlightText(text, words) {
+    console.log(words);
     // Escape special characters and create a case-insensitive regex pattern for all words
     const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     const pattern = new RegExp(`(${escaped.join("|")})`, "gi");
@@ -182,16 +183,16 @@ document.addEventListener("DOMContentLoaded", function () {
       "a", "an", "the", "is", "of", "in", "at", "on", "to", "for", "with", "and", "or",
       "does", "how", "what", "can", "do"
     ]);
-
+  
     const words = query
       .trim()
       .toLowerCase()
       .split(/\s+/)
       .filter((w) => w.length > 1 && !stopWords.has(w));
-
+  
     const resultMap = new Map();
     const fullResults = fuse.search(query);
-
+  
     // First pass: store full query matches
     fullResults.forEach((res) => {
       const id = res.item.id;
@@ -204,7 +205,7 @@ document.addEventListener("DOMContentLoaded", function () {
         matchedInTitle: false,
       });
     });
-
+  
     // Second pass: store partial matches per word
     words.forEach((word) => {
       const results = fuse.search(word);
@@ -232,19 +233,36 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       });
     });
-
-
+  
+    // Filter results: only keep if at least one word satisfies the condition
+    // const filteredResults = Array.from(resultMap.values()).filter((entry) => {
+    //   const haystack = JSON.stringify(entry.item).toLowerCase();
+    //   const queryWords = query.trim().toLowerCase().split(/\s+/);
+    //   const hasLongWord = queryWords.some((word) => word.length >= 4);
+    
+    //   return queryWords.some((word) => {
+    //     if (hasLongWord) {
+    //       // There is at least one long word — keep all
+    //       return true;
+    //     }
+    
+    //     // Short words — allow either exact word match or substring match
+    //     const exactMatch = new RegExp(`\\b${word}\\b`).test(haystack);
+    //     const substringMatch = haystack.includes(word);
+    //     return exactMatch || substringMatch;
+    //   });
+    // });
     // Filter results: only keep if at least one query word appears as a substring
-    const filteredResults = Array.from(resultMap.values()).filter((entry) => {
-      const haystack = JSON.stringify(entry.item).toLowerCase();
-      const queryWords = query.trim().toLowerCase().split(/\s+/);
+const filteredResults = Array.from(resultMap.values()).filter((entry) => {
+  const haystack = JSON.stringify(entry.item).toLowerCase();
+  const queryWords = query.trim().toLowerCase().split(/\s+/);
 
-      // Leave if at least one word from the query is included in the element as a substring
-      return queryWords.some((word) => haystack.includes(word));
-    });
-
-
-
+  // Leave if at least one word from the query is included in the element as a substring
+  return queryWords.some((word) => haystack.includes(word));
+});
+    
+    
+  
     // Transform and sort results by relevance
     return filteredResults
       .map((entry) => ({
@@ -263,7 +281,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return a.averageScore - b.averageScore;
       });
   }
-
+  
 
   // Debounce utility to limit how often search is triggered
   function debounce(func, delay) {
