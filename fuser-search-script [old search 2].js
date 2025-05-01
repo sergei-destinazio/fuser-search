@@ -234,6 +234,21 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   
     // Filter results: only keep if at least one word satisfies the condition
+    // const filteredResults = Array.from(resultMap.values()).filter((entry) => {
+    //   const haystack = JSON.stringify(entry.item).toLowerCase();
+    //   const queryWords = query.trim().toLowerCase().split(/\s+/);
+    //   const hasLongWord = queryWords.some((word) => word.length >= 4);
+    
+    //   return queryWords.some((word) => {
+    //     if (hasLongWord) {
+    //       // There is at least one long word - skip the filter, the result has already been given by Fuse
+    //       return true;
+    //     }
+    
+    //     // Short words only - we require an exact match of at least one
+    //     return new RegExp(`\\b${word}\\b`).test(haystack);
+    //   });
+    // });
     const filteredResults = Array.from(resultMap.values()).filter((entry) => {
       const haystack = JSON.stringify(entry.item).toLowerCase();
       const queryWords = query.trim().toLowerCase().split(/\s+/);
