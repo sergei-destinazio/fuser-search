@@ -110,8 +110,8 @@ document.addEventListener("DOMContentLoaded", function () {
     if (initialElement && controls) controls.style.display = "none"; // hide pagination
 
     // Remove initial state markers
-    document.querySelectorAll('[fuse-initial-state=”true”]').forEach((el) => {
-      el.removeAttribute("fuse-initial-state=”true”");
+    document.querySelectorAll('[fuse-initial-state="true"]').forEach((el) => {
+      el.removeAttribute('fuse-initial-state');
     });
   }
 
