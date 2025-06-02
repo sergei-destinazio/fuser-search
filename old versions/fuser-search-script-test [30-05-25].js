@@ -96,7 +96,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Create Fuse instance with configuration
   const fuse = new Fuse(data, {
     keys: generateFuseKeys(fields), // keys and weights
-    threshold: 0.4,                 // match sensitivity (lower = stricter)
+    threshold: 0.2,                 // match sensitivity (lower = stricter)
     distance: 100,                  // how far matches can be
     ignoreLocation: true,          // ignore match position
     includeMatches: true,          // include match details
@@ -136,93 +136,84 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Highlight matching words in text
-function highlightWords(text, queryWords, maxDistance = 2) {
-  const wordsWithIndices = [];
-  const wordRegex = /\b\w+\b/g;
-  let match;
+  function highlightWords(text, queryWords, maxDistance = 2) {
+    const wordsWithIndices = [];
+    const wordRegex = /\b\w+\b/g;
+    let match;
 
-  while ((match = wordRegex.exec(text)) !== null) {
-    wordsWithIndices.push({
-      word: match[0],
-      index: match.index,
-    });
-  }
+    // Find all words and their positions
+    while ((match = wordRegex.exec(text)) !== null) {
+      wordsWithIndices.push({
+        word: match[0],
+        index: match.index,
+      });
+    }
 
-  const matches = [];
+    const matches = [];
 
-  for (const { word, index } of wordsWithIndices) {
-    const lowerWord = word.toLowerCase();
+    for (const { word, index } of wordsWithIndices) {
+      const lowerWord = word.toLowerCase();
 
-    for (const query of queryWords) {
-      const lowerQuery = query.toLowerCase();
+      for (const query of queryWords) {
+        const lowerQuery = query.toLowerCase();
 
-      // (1) Exact match (short queries)
-      if (query.length < 5 && lowerWord === lowerQuery) {
-        matches.push({ index, length: word.length });
-        break;
-      }
-
-      // (2) Includes
-      if (query.length > 3 && lowerWord.includes(lowerQuery)) {
-        const start = lowerWord.indexOf(lowerQuery);
-        matches.push({ index: index + start, length: query.length });
-        break;
-      }
-
-      // (3) Fuzzy match (find closest matching window)
-      if (query.length >= 5) {
-        let bestDist = Infinity;
-        let bestStart = -1;
-        let bestLen = -1;
-
-        for (let start = 0; start < lowerWord.length; start++) {
-          for (let len = 2; len <= lowerWord.length - start; len++) {
-            const sub = lowerWord.slice(start, start + len);
-            const dist = levenshteinDistance(sub, lowerQuery);
-            if (dist < bestDist || (dist === bestDist && len > bestLen)) {
-              bestDist = dist;
-              bestStart = start;
-              bestLen = len;
-            }
+        // (1) Exact match of the whole word (if short)
+        if (query.length < 5) {
+          if (lowerWord === lowerQuery) {
+            matches.push({ index, length: word.length });
+            break;
           }
         }
 
-        if (bestDist <= maxDistance && bestStart !== -1) {
-          matches.push({ index: index + bestStart, length: bestLen });
+        // (2) Entering a query inside a word if the length is > 3
+        if (query.length > 3 && lowerWord.includes(lowerQuery)) {
+          matches.push({ index, length: word.length });
           break;
+        }
+
+        // (3) Fuzzy comparison if length >= 5
+        if (query.length >= 5) {
+          const distance = levenshteinDistance(lowerWord, lowerQuery);
+          if (distance <= maxDistance) {
+            matches.push({ index, length: word.length });
+            break;
+          }
         }
       }
     }
+
+    // Remove overlaps and sort
+    const nonOverlapping = matches
+      .sort((a, b) => a.index - b.index)
+      .filter((match, i, arr) => {
+        if (i === 0) return true;
+        const prev = arr[i - 1];
+        return match.index >= prev.index + prev.length;
+      });
+
+    // Highlight
+    let highlighted = "";
+    let lastIndex = 0;
+
+    for (const match of nonOverlapping) {
+      highlighted += text.slice(lastIndex, match.index);
+      highlighted += `<span data-fuse-highlight>${text.slice(match.index, match.index + match.length)}</span>`;
+      lastIndex = match.index + match.length;
+    }
+
+    highlighted += text.slice(lastIndex);
+    return highlighted;
   }
-
-  // Remove overlaps and sort
-  const nonOverlapping = matches
-    .sort((a, b) => a.index - b.index)
-    .filter((match, i, arr) => {
-      if (i === 0) return true;
-      const prev = arr[i - 1];
-      return match.index >= prev.index + prev.length;
-    });
-
-  // Highlight
-  let highlighted = "";
-  let lastIndex = 0;
-
-  for (const match of nonOverlapping) {
-    highlighted += text.slice(lastIndex, match.index);
-    highlighted += `<span data-fuse-highlight>${text.slice(match.index, match.index + match.length)}</span>`;
-    lastIndex = match.index + match.length;
-  }
-
-  highlighted += text.slice(lastIndex);
-  return highlighted;
-}
 
 
 
   // Generate excerpt around the first matching word
-  function getExcerpt(description, words, maxDistance = 2) {
+  function getExcerpt(description, words) {
     const lowerDesc = description.toLowerCase();
+    let matchIndex = -1;
+    let foundWord = "";
+
+    // Low priority words
     const lowPriorityWords = new Set([
       "a", "an", "the", "is", "of", "in", "at", "on", "to", "for", "with", "and", "or",
       "does", "how", "what", "can", "do", "you", "your", "are", "am", "could"
@@ -239,78 +230,61 @@ function highlightWords(text, queryWords, maxDistance = 2) {
       }
     }
 
-    // Function for fuzzy-search of similar word in text
-    function findFuzzyMatch(wordList) {
-      const wordRegex = /\b\w+\b/g;
-      let match;
-      const descWords = [];
-
-      while ((match = wordRegex.exec(lowerDesc)) !== null) {
-        descWords.push({
-          word: match[0],
-          index: match.index
-        });
+    // Try to find exact match of any high-priority word
+    for (const word of highPriorityWords) {
+      const idx = lowerDesc.indexOf(word.toLowerCase());
+      if (idx !== -1) {
+        matchIndex = idx;
+        foundWord = word;
+        break;
       }
-
-      for (const { word: targetWord, index } of descWords) {
-        const lowerTarget = targetWord.toLowerCase();
-
-        for (const query of wordList) {
-          const lowerQuery = query.toLowerCase();
-
-          // Direct match
-          if (lowerQuery.length < 5 && lowerTarget === lowerQuery) {
-            return { index, word: targetWord };
-          }
-
-          // Inclusion in the word
-          if (lowerQuery.length > 3 && lowerTarget.includes(lowerQuery)) {
-            return { index, word: targetWord };
-          }
-
-          // Fuzzy comparison
-          if (lowerQuery.length >= 5) {
-            for (let i = 0; i <= lowerTarget.length - lowerQuery.length; i++) {
-              const sub = lowerTarget.slice(i, i + lowerQuery.length);
-              const dist = levenshteinDistance(sub, lowerQuery);
-              if (dist <= maxDistance) {
-                return { index, word: targetWord };
-              }
-            }
-          }
-        }
-      }
-
-      return null;
     }
 
-    // Try to find high-priority words
-    let matchResult = findFuzzyMatch(highPriorityWords);
+    // If no exact match found, try partial match using the first 3 letters
+    if (matchIndex === -1 && highPriorityWords.length) {
+      for (const word of highPriorityWords) {
+        const prefix = word.slice(0, 3);
+        const re = new RegExp(prefix, "i");
+        const m = description.match(re);
+        if (m && m.index !== undefined) {
+          matchIndex = m.index;
+          foundWord = m[0];
+          break;
+        }
+      }
+    }
 
-    // If didn't find, try low-priority
-    if (!matchResult && lowPriorityMatches.length) {
-      matchResult = findFuzzyMatch(lowPriorityMatches);
+
+    if (matchIndex === -1 && lowPriorityMatches.length) {
+      // Try to find exact match of any low-priority word
+      for (const word of lowPriorityMatches) {
+        const idx = lowerDesc.indexOf(word.toLowerCase());
+        if (idx !== -1) {
+          matchIndex = idx;
+          foundWord = word;
+          break;
+        }
+      }
     }
 
     let excerpt = "";
 
-    if (matchResult) {
-      const { index } = matchResult;
-      const start = Math.max(0, index - 40);
-      const end = Math.min(description.length, index + 40);
+    // If a match was found, extract surrounding text as excerpt
+    if (matchIndex !== -1) {
+      const start = Math.max(0, matchIndex - 40);
+      const end = Math.min(description.length, matchIndex + 40);
       excerpt = description.slice(start, end);
       if (start > 0) excerpt = "..." + excerpt;
       if (end < description.length) excerpt += "...";
     } else {
-      // if nothing is found, cut off the beginning
+      // If no match found, use beginning of the description
       excerpt = description.slice(0, 80);
       if (description.length > 80) excerpt += "...";
     }
 
-    // Return with backlighting
+    // Highlight found words inside the excerpt
     return highlightWords(excerpt, words);
   }
-
 
   // Name of the title field to prioritize if it exists
   const titleField = "title";

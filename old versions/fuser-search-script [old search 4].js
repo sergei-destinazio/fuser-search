@@ -115,213 +115,72 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Find fuzzy matching to highlight
-  function levenshteinDistance(a, b) {
-    const matrix = Array.from({ length: a.length + 1 }, (_, i) =>
-      Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
-    );
+  // Highlight matching words in text
+  function highlightText(text, words) {
+    // Escape special characters and create a case-insensitive regex pattern for all words
+    const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const pattern = new RegExp(`(${escaped.join("|")})`, "gi");
+    // Wrap each match with a span tag for highlighting
+    return text.replace(pattern, '<span data-fuse-highlight>$1</span>');
+  }
 
-    for (let i = 1; i <= a.length; i++) {
-      for (let j = 1; j <= b.length; j++) {
-        const cost = a[i - 1].toLowerCase() === b[j - 1].toLowerCase() ? 0 : 1;
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j - 1] + cost
-        );
+  // Generate excerpt around the first matching word
+  function getExcerpt(description, words) {
+    const lowerDesc = description.toLowerCase();
+    let matchIndex = -1;
+    let foundWord = "";
+
+    // Try to find exact match of any word
+    for (const word of words) {
+      const idx = lowerDesc.indexOf(word.toLowerCase());
+      if (idx !== -1) {
+        matchIndex = idx;
+        foundWord = word;
+        break;
       }
     }
 
-    return matrix[a.length][b.length];
-  }
-
-  // Highlight matching words in text
-function highlightWords(text, queryWords, maxDistance = 2) {
-  const wordsWithIndices = [];
-  const wordRegex = /\b\w+\b/g;
-  let match;
-
-  while ((match = wordRegex.exec(text)) !== null) {
-    wordsWithIndices.push({
-      word: match[0],
-      index: match.index,
-    });
-  }
-
-  const matches = [];
-
-  for (const { word, index } of wordsWithIndices) {
-    const lowerWord = word.toLowerCase();
-
-    for (const query of queryWords) {
-      const lowerQuery = query.toLowerCase();
-
-      // (1) Exact match (short queries)
-      if (query.length < 5 && lowerWord === lowerQuery) {
-        matches.push({ index, length: word.length });
-        break;
-      }
-
-      // (2) Includes
-      if (query.length > 3 && lowerWord.includes(lowerQuery)) {
-        const start = lowerWord.indexOf(lowerQuery);
-        matches.push({ index: index + start, length: query.length });
-        break;
-      }
-
-      // (3) Fuzzy match (find closest matching window)
-      if (query.length >= 5) {
-        let bestDist = Infinity;
-        let bestStart = -1;
-        let bestLen = -1;
-
-        for (let start = 0; start < lowerWord.length; start++) {
-          for (let len = 2; len <= lowerWord.length - start; len++) {
-            const sub = lowerWord.slice(start, start + len);
-            const dist = levenshteinDistance(sub, lowerQuery);
-            if (dist < bestDist || (dist === bestDist && len > bestLen)) {
-              bestDist = dist;
-              bestStart = start;
-              bestLen = len;
-            }
-          }
-        }
-
-        if (bestDist <= maxDistance && bestStart !== -1) {
-          matches.push({ index: index + bestStart, length: bestLen });
+    // If no exact match found, try partial match using the first 3 letters
+    if (matchIndex === -1 && words.length) {
+      for (const word of words) {
+        const prefix = word.slice(0, 3);
+        const re = new RegExp(prefix, "i");
+        const m = description.match(re);
+        if (m && m.index !== undefined) {
+          matchIndex = m.index;
+          foundWord = m[0];
           break;
         }
       }
     }
-  }
-
-  // Remove overlaps and sort
-  const nonOverlapping = matches
-    .sort((a, b) => a.index - b.index)
-    .filter((match, i, arr) => {
-      if (i === 0) return true;
-      const prev = arr[i - 1];
-      return match.index >= prev.index + prev.length;
-    });
-
-  // Highlight
-  let highlighted = "";
-  let lastIndex = 0;
-
-  for (const match of nonOverlapping) {
-    highlighted += text.slice(lastIndex, match.index);
-    highlighted += `<span data-fuse-highlight>${text.slice(match.index, match.index + match.length)}</span>`;
-    lastIndex = match.index + match.length;
-  }
-
-  highlighted += text.slice(lastIndex);
-  return highlighted;
-}
-
-
-
-  // Generate excerpt around the first matching word
-  function getExcerpt(description, words, maxDistance = 2) {
-    const lowerDesc = description.toLowerCase();
-    const lowPriorityWords = new Set([
-      "a", "an", "the", "is", "of", "in", "at", "on", "to", "for", "with", "and", "or",
-      "does", "how", "what", "can", "do", "you", "your", "are", "am", "could"
-    ]);
-
-    const highPriorityWords = [];
-    const lowPriorityMatches = [];
-
-    for (const word of words) {
-      if (lowPriorityWords.has(word.toLowerCase())) {
-        lowPriorityMatches.push(word);
-      } else {
-        highPriorityWords.push(word);
-      }
-    }
-
-    // Function for fuzzy-search of similar word in text
-    function findFuzzyMatch(wordList) {
-      const wordRegex = /\b\w+\b/g;
-      let match;
-      const descWords = [];
-
-      while ((match = wordRegex.exec(lowerDesc)) !== null) {
-        descWords.push({
-          word: match[0],
-          index: match.index
-        });
-      }
-
-      for (const { word: targetWord, index } of descWords) {
-        const lowerTarget = targetWord.toLowerCase();
-
-        for (const query of wordList) {
-          const lowerQuery = query.toLowerCase();
-
-          // Direct match
-          if (lowerQuery.length < 5 && lowerTarget === lowerQuery) {
-            return { index, word: targetWord };
-          }
-
-          // Inclusion in the word
-          if (lowerQuery.length > 3 && lowerTarget.includes(lowerQuery)) {
-            return { index, word: targetWord };
-          }
-
-          // Fuzzy comparison
-          if (lowerQuery.length >= 5) {
-            for (let i = 0; i <= lowerTarget.length - lowerQuery.length; i++) {
-              const sub = lowerTarget.slice(i, i + lowerQuery.length);
-              const dist = levenshteinDistance(sub, lowerQuery);
-              if (dist <= maxDistance) {
-                return { index, word: targetWord };
-              }
-            }
-          }
-        }
-      }
-
-      return null;
-    }
-
-    // Try to find high-priority words
-    let matchResult = findFuzzyMatch(highPriorityWords);
-
-    // If didn't find, try low-priority
-    if (!matchResult && lowPriorityMatches.length) {
-      matchResult = findFuzzyMatch(lowPriorityMatches);
-    }
 
     let excerpt = "";
 
-    if (matchResult) {
-      const { index } = matchResult;
-      const start = Math.max(0, index - 40);
-      const end = Math.min(description.length, index + 40);
+    // If a match was found, extract surrounding text as excerpt
+    if (matchIndex !== -1) {
+      const start = Math.max(0, matchIndex - 40);
+      const end = Math.min(description.length, matchIndex + 40);
       excerpt = description.slice(start, end);
       if (start > 0) excerpt = "..." + excerpt;
       if (end < description.length) excerpt += "...";
     } else {
-      // if nothing is found, cut off the beginning
+      // If no match found, use beginning of the description
       excerpt = description.slice(0, 80);
       if (description.length > 80) excerpt += "...";
     }
 
-    // Return with backlighting
-    return highlightWords(excerpt, words);
+    // Highlight found words inside the excerpt
+    return highlightText(excerpt, words);
   }
-
 
   // Name of the title field to prioritize if it exists
   const titleField = "title";
 
   // Main smart search function with prioritization logic
-
-
   function searchSmart(query) {
     const stopWords = new Set([
       "a", "an", "the", "is", "of", "in", "at", "on", "to", "for", "with", "and", "or",
-      "does", "how", "what", "can", "do", "you", "your", "are", "am", "could"
+      "does", "how", "what", "can", "do"
     ]);
 
     const words = query
@@ -330,172 +189,69 @@ function highlightWords(text, queryWords, maxDistance = 2) {
       .split(/\s+/)
       .filter((w) => w.length > 1 && !stopWords.has(w));
 
-    const shortWords = words.filter((w) => w.length < 5);
-    const longWords = words.filter((w) => w.length >= 5);
+    const resultMap = new Map();
+    const fullResults = fuse.search(query);
 
-    const resultMap = new Map(); // for strict matches
-    const looseResultMap = new Map(); // for loose matches
+    // First pass: store full query matches
+    fullResults.forEach((res) => {
+      const id = res.item.id;
+      resultMap.set(id, {
+        item: res.item,
+        scoreSum: res.score,
+        count: 1,
+        fullMatch: true,
+        matchedWords: new Set(),
+        matchedInTitle: false,
+      });
+    });
 
-    // Fuzzy search for long words
-    longWords.forEach((word) => {
+    // Second pass: store partial matches per word
+    words.forEach((word) => {
       const results = fuse.search(word);
       results.forEach((res) => {
         const id = res.item.id;
-
-        // Strict match
         if (!resultMap.has(id)) {
           resultMap.set(id, {
             item: res.item,
-            matchedQueryWords: new Set(),
             scoreSum: 0,
             count: 0,
-            matchedInTitle: false,
             fullMatch: false,
+            matchedWords: new Set(),
+            matchedInTitle: false,
           });
         }
         const entry = resultMap.get(id);
         entry.scoreSum += res.score;
         entry.count += 1;
-        entry.matchedQueryWords.add(word);
+        entry.matchedWords.add(word);
         if (
           fields.includes(titleField) &&
           res.item[titleField]?.toLowerCase().includes(word)
         ) {
           entry.matchedInTitle = true;
         }
-
-        // Also add to loose map
-        if (!looseResultMap.has(id)) {
-          looseResultMap.set(id, {
-            item: res.item,
-            matchedQueryWords: new Set(),
-            scoreSum: 0,
-            count: 0,
-            matchedInTitle: false,
-            fullMatch: false,
-          });
-        }
-        const looseEntry = looseResultMap.get(id);
-        looseEntry.scoreSum += res.score;
-        looseEntry.count += 1;
-        looseEntry.matchedQueryWords.add(word);
-        if (
-          fields.includes(titleField) &&
-          res.item[titleField]?.toLowerCase().includes(word)
-        ) {
-          looseEntry.matchedInTitle = true;
-        }
       });
     });
 
-    // Exact search for short words
-    shortWords.forEach((word) => {
-      data.forEach((item) => {
-        const haystack = JSON.stringify(item).toLowerCase();
-        if (haystack.includes(word)) {
-          const id = item.id;
 
-          // Strict
-          if (!resultMap.has(id)) {
-            resultMap.set(id, {
-              item: item,
-              matchedQueryWords: new Set(),
-              scoreSum: 0,
-              count: 0,
-              matchedInTitle: false,
-              fullMatch: false,
-            });
-          }
-          const entry = resultMap.get(id);
-          entry.count += 1;
-          entry.matchedQueryWords.add(word);
-          if (
-            fields.includes(titleField) &&
-            item[titleField]?.toLowerCase().includes(word)
-          ) {
-            entry.matchedInTitle = true;
-          }
+    // Filter results: only keep if at least one query word appears as a substring
+    const filteredResults = Array.from(resultMap.values()).filter((entry) => {
+      const haystack = JSON.stringify(entry.item).toLowerCase();
+      const queryWords = query.trim().toLowerCase().split(/\s+/);
 
-          // Loose
-          if (!looseResultMap.has(id)) {
-            looseResultMap.set(id, {
-              item: item,
-              matchedQueryWords: new Set(),
-              scoreSum: 0,
-              count: 0,
-              matchedInTitle: false,
-              fullMatch: false,
-            });
-          }
-          const looseEntry = looseResultMap.get(id);
-          looseEntry.count += 1;
-          looseEntry.matchedQueryWords.add(word);
-          if (
-            fields.includes(titleField) &&
-            item[titleField]?.toLowerCase().includes(word)
-          ) {
-            looseEntry.matchedInTitle = true;
-          }
-        }
-      });
+      // Leave if at least one word from the query is included in the element as a substring
+      return queryWords.some((word) => haystack.includes(word));
     });
 
-    // Full phrase match
-    const fullResults = fuse.search(query);
-    fullResults.forEach((res) => {
-      const id = res.item.id;
 
-      if (!resultMap.has(id)) {
-        resultMap.set(id, {
-          item: res.item,
-          matchedQueryWords: new Set(),
-          scoreSum: 0,
-          count: 0,
-          matchedInTitle: false,
-          fullMatch: true,
-        });
-      }
-      const entry = resultMap.get(id);
-      entry.scoreSum += res.score;
-      entry.count += 1;
-      entry.fullMatch = true;
 
-      // Also add to loose matches
-      if (!looseResultMap.has(id)) {
-        looseResultMap.set(id, {
-          item: res.item,
-          matchedQueryWords: new Set(),
-          scoreSum: 0,
-          count: 0,
-          matchedInTitle: false,
-          fullMatch: true,
-        });
-      }
-      const looseEntry = looseResultMap.get(id);
-      looseEntry.scoreSum += res.score;
-      looseEntry.count += 1;
-      looseEntry.fullMatch = true;
-    });
-
-    // Strict: require all words matched
-    const strictResults = Array.from(resultMap.values()).filter((entry) =>
-      words.every((w) => entry.matchedQueryWords.has(w))
-    );
-
-    // Loose: require at least one word matched, and not already in strict
-    const strictIds = new Set(strictResults.map((r) => r.item.id));
-    const looseResults = Array.from(looseResultMap.values()).filter(
-      (entry) => !strictIds.has(entry.item.id) && words.some((w) => entry.matchedQueryWords.has(w))
-    );
-
-    const combined = [...strictResults, ...looseResults];
-
-    return combined
+    // Transform and sort results by relevance
+    return filteredResults
       .map((entry) => ({
         item: entry.item,
-        averageScore: entry.count > 0 ? entry.scoreSum / entry.count : 1,
+        averageScore: entry.scoreSum / entry.count,
         fullMatch: entry.fullMatch,
-        matchedCount: entry.matchedQueryWords.size,
+        matchedCount: entry.matchedWords.size,
         matchedInTitle: entry.matchedInTitle,
       }))
       .sort((a, b) => {
@@ -507,7 +263,6 @@ function highlightWords(text, queryWords, maxDistance = 2) {
         return a.averageScore - b.averageScore;
       });
   }
-
 
 
   // Debounce utility to limit how often search is triggered
@@ -546,26 +301,8 @@ function highlightWords(text, queryWords, maxDistance = 2) {
       return;
     }
 
-    const searchResults = searchSmart(query);
+    const results = searchSmart(query);
     const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
-
-    // Sort results
-    const results = searchResults.slice().sort((a, b) => {
-      const aTitleMatch = words.some((w) => a.item.title?.toLowerCase().includes(w));
-      const bTitleMatch = words.some((w) => b.item.title?.toLowerCase().includes(w));
-
-      if (aTitleMatch && !bTitleMatch) return -1;
-      if (!aTitleMatch && bTitleMatch) return 1;
-
-      const aDescMatch = words.some((w) => a.item.description?.toLowerCase().includes(w));
-      const bDescMatch = words.some((w) => b.item.description?.toLowerCase().includes(w));
-
-      if (aDescMatch && !bDescMatch) return -1;
-      if (!aDescMatch && bDescMatch) return 1;
-
-      // If both are at the same level, we keep the original order.
-      return 0;
-    });
 
     // Show "no results" block if search has no matches
     if (noResultsElement && query !== "" && !results.length) {
@@ -603,7 +340,7 @@ function highlightWords(text, queryWords, maxDistance = 2) {
       fields.forEach((field) => {
         const fieldEl = el.querySelector(`[data-fuse-field="${field}"]`);
         if (fieldEl) {
-          fieldEl.innerHTML = highlightWords(res.item[field], words);
+          fieldEl.innerHTML = highlightText(res.item[field], words);
         }
       });
 
@@ -666,7 +403,7 @@ function highlightWords(text, queryWords, maxDistance = 2) {
         fields.forEach((field) => {
           const fieldEl = el.querySelector(`[data-fuse-field="${field}"]`);
           if (fieldEl) {
-            fieldEl.innerHTML = highlightWords(res.item[field], words);
+            fieldEl.innerHTML = highlightText(res.item[field], words);
           }
         });
 
